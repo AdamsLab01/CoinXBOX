@@ -6,6 +6,8 @@ specific about the code and it should work swimmingly with any device that outpu
 
 For more information see - http://awaitinginspiration.com or ping adam@adambyers.com
 
+All code (except external libraries and third party code) is published under the MIT License.
+
 **********************************************************************************************************************/
 
 // include the Arduino LCD libraries
