@@ -36,6 +36,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define S_limit 5
 #define S_countdown 6
 #define S_choretime 7
+#define S_caught 8
 
 // Default start up state
 int state = S_ready;
@@ -53,7 +54,7 @@ const int CoinSW = 2;
 const int VideoSW = 4;
 const int StartSW = A0;
 const int PauseSW = A1;
-const int CoinLED = A2;
+const int CaughtSW = A2; // Was CoinLED
 const int OverrideSW = A3;
 const int VideoDetect  = A4;
 const int Speaker = A5;
@@ -76,7 +77,7 @@ int TimeStringIndex = 0;
 
 // Video on/off switching vars
 int VideoSwitchState = LOW;
-long VideoSwitchBuffer = 2000; // Used to add some seconds (2 seconds to be precise) to AllowedPlaytime after video ON switching event to compensate for TV sync time.
+long VideoSwitchBuffer = 120000; // Add 2 miniutes to the "bought" time to compensate for video turn on delay.
 unsigned long SwitchPreviousMillis = 0;
 long VideoSwitchInterval = 1000; // How long (in milliseconds) we "hold down" the HDMI input selector button when switching inputs.
 
@@ -133,7 +134,7 @@ pinMode(Speaker, OUTPUT);
 pinMode(CoinSW, INPUT);
 pinMode(StartSW, INPUT);
 pinMode(PauseSW, INPUT);
-pinMode(CoinLED, OUTPUT);
+pinMode(CaughtSW, INPUT);
 pinMode(OverrideSW, INPUT);
 pinMode(VideoDetect,INPUT);
 
@@ -143,6 +144,7 @@ digitalWrite(StartSW, HIGH);
 digitalWrite(PauseSW, HIGH);
 digitalWrite(OverrideSW, HIGH);
 digitalWrite(VideoDetect, HIGH);
+digitalWrite(CaughtSW, HIGH);
 
 // Initialize special LCD characters.
 lcd.createChar(1, armsUp);
@@ -180,6 +182,10 @@ void loop() {
     case S_pause:
       F_pause();
     break;   
+   
+    case S_caught:
+      F_caught();
+    break;   
    }
    
 }
@@ -213,11 +219,16 @@ void F_ready() {
     state = S_override;
   }
   
-  digitalWrite(CoinLED, HIGH);
+  //digitalWrite(CoinLED, HIGH);
   
   if (digitalRead(CoinSW) == LOW) {
     lcd.clear();
     state = S_coin;
+  }
+  
+  if (digitalRead(CaughtSW) == LOW) {
+    lcd.clear();
+    state = S_caught;
   }
   
 }
@@ -244,7 +255,7 @@ void F_override() {
   lcd.setCursor(2, 1);
   lcd.print(" Lucky You ");
   
-  digitalWrite(CoinLED, LOW);
+  //digitalWrite(CoinLED, LOW);
   
   if (digitalRead(OverrideSW) == HIGH){
     lcd.clear();
@@ -293,17 +304,22 @@ void F_coin() {
   
   if (DepositStringIndex == 2) { // We only allow 1 hour of playtime. Player can deposit more coins if they want but the system won't count them after this point.
     lcd.clear();
-    digitalWrite(CoinLED, LOW);
+    //digitalWrite(CoinLED, LOW);
     state = S_limit;
   } 
   
   if (digitalRead(StartSW) == LOW) { // Logic is inverted since we're using the internal resistors. When button is pressed the PIN goes LOW, when not pressed it's HIGH.
     lcd.clear();
-    digitalWrite(CoinLED, LOW);
+    //digitalWrite(CoinLED, LOW);
     AllowedPlaytime = CoinCount * 60000; // Multiply the CoinCount by 60000 (milliseconds) to get the AllowedPlaytime.
     AllowedPlaytime = AllowedPlaytime + VideoSwitchBuffer; // Add some time (VideoSwitchBuffer) to make up for the time it took the TV to sync back up and display video.
     state = S_countdown;
   } 
+  
+  if (digitalRead(CaughtSW) == LOW) {
+    lcd.clear();
+    state = S_caught;
+  }
   
 }
 
@@ -327,6 +343,11 @@ void F_limit() {
     AllowedPlaytime = CoinCount * 60000; // Multiply the CoinCount by 60000 (milliseconds) to get the AllowedPlaytime.
     AllowedPlaytime = AllowedPlaytime + VideoSwitchBuffer; // Add some time (VideoSwitchBuffer) to make up for the time it took the TV to sync back up and display video.
     state = S_countdown;
+  }
+  
+  if (digitalRead(CaughtSW) == LOW) {
+    lcd.clear();
+    state = S_caught;
   }
   
 }
@@ -386,6 +407,11 @@ void F_countdown() {
     state = S_choretime;
   } 
   
+  if (digitalRead(CaughtSW) == LOW) {
+    lcd.clear();
+    state = S_caught;
+  }
+  
 }
 
 ////////////////////////////////////////////////////////////
@@ -406,6 +432,11 @@ void F_pause() {
     lcd.clear();
     AllowedPlaytime = AllowedPlaytime + VideoSwitchBuffer; // Add some time (VideoSwitchBuffer) to make up for the time it took to turn the video on.
     state = S_countdown;
+  }
+  
+  if (digitalRead(CaughtSW) == LOW) {
+    lcd.clear();
+    state = S_caught;
   }
   
 }
@@ -451,7 +482,12 @@ void F_choretime() {
     lcd.clear();
     F_warning3();
     state = S_ready; 
-  } 
+  }
+  
+  if (digitalRead(CaughtSW) == LOW) {
+    lcd.clear();
+    state = S_caught;
+  }
   
 }
 
@@ -509,6 +545,11 @@ void F_timeDisplay() {
     }
   }
   
+  if (digitalRead(CaughtSW) == LOW) {
+    lcd.clear();
+    state = S_caught;
+  }
+  
 }
 
 ////////////////////////////////////////////////////////////
@@ -544,6 +585,11 @@ void F_video_on() {
   
   ClearLCD = true;
   
+  if (digitalRead(CaughtSW) == LOW) {
+    lcd.clear();
+    state = S_caught;
+  }
+
 }
 
 ////////////////////////////////////////////////////////////
@@ -559,7 +605,12 @@ void F_video_off() {
       else 
         VideoSwitchState = LOW;     
     digitalWrite(VideoSW, VideoSwitchState);
-  } 
+  }
+  
+  if (digitalRead(CaughtSW) == LOW) {
+    lcd.clear();
+    state = S_caught;
+  }
   
 }
 
@@ -602,4 +653,17 @@ void LCDBacklight(uint8_t r, uint8_t g, uint8_t b) {
   analogWrite(LCDg, g);
   analogWrite(LCDb, b);
   
+}
+
+////////////////////////////////////////////////////////////
+
+void F_caught() {
+  
+  tone(Speaker, 2000);
+
+  LCDBacklight(255, 0, 0); // Red
+  lcd.setCursor(2, 0);
+  lcd.print("YOU'RE");
+  lcd.setCursor(3, 1);
+  lcd.print("FUCKED");
 }
